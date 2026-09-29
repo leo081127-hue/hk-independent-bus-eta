@@ -3,7 +3,9 @@ import { isHoliday, isRouteAvaliable } from "./timetable";
 
 describe("isHoliday", () => {
   it("returns true when the YYYYMMDD key is present", () => {
-    expect(isHoliday(["20260701"], new Date("2026-07-01T04:00:00Z"))).toBe(true);
+    expect(isHoliday(["20260701"], new Date("2026-07-01T04:00:00Z"))).toBe(
+      true
+    );
   });
 
   it("returns false for a normal weekday", () => {
