@@ -4,34 +4,93 @@ import AppContext from "../context/AppContext";
 import useLanguage from "./useTranslation";
 import DbContext from "../context/DbContext";
 
-export const useEtas = (routeId: string, disable: boolean = false) => {
+export interface UseEtasReturn {
+  /** Latest ETA list, or null while the very first fetch is in flight. */
+  etas: Eta[] | null;
+  /** True while a fetch is in flight. */
+  loading: boolean;
+  /** Last fetch error, if any. */
+  error: Error | null;
+  /** Force an immediate refetch (ignores the refresh interval). */
+  refetch: () => Promise<void>;
+}
+
+const DefaultRoute = {
+  co: [""],
+  stops: { "": [""] },
+  dest: { zh: "", en: "" },
+  bound: "",
+  nlbId: 0,
+  gtfsId: "",
+  fares: [],
+  faresHoliday: [],
+};
+
+export const useEtas = (routeId: string, disable = false): UseEtasReturn => {
   const { isVisible, refreshInterval } = useContext(AppContext);
   const {
     db: { routeList, stopList, holidays, serviceDayMap },
   } = useContext(DbContext);
   const [routeKey, seq] = routeId.split("/");
   const routeObj = routeList[routeKey] || DefaultRoute;
-  const [etas, setEtas] = useState<Eta[] | null>(null);
   const language = useLanguage();
-  const isMounted = useRef<boolean>(false);
 
-  const fetchData = useCallback(() => {
-    if (!isVisible || navigator.userAgent === "prerendering") {
-      // skip if prerendering
+  const [etas, setEtas] = useState<Eta[] | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const isMounted = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (disable || !isVisible || navigator.userAgent === "prerendering") {
       setEtas(null);
-      return new Promise((resolve) => resolve([]));
+      return;
     }
-    return fetchEtas({
-      ...routeObj,
-      seq: parseInt(seq, 10),
-      stopList,
-      language,
-      holidays,
-      serviceDayMap,
-    }).then((_etas) => {
-      if (isMounted.current) setEtas(_etas);
-    });
-  }, [isVisible, language, routeObj, seq, stopList, holidays, serviceDayMap]);
+
+    // Cancel any request that is still in flight.
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const nextEtas = await fetchEtas({
+        ...routeObj,
+        seq: parseInt(seq, 10),
+        stopList,
+        language,
+        holidays,
+        serviceDayMap,
+      });
+      if (isMounted.current && !controller.signal.aborted) {
+        setEtas(nextEtas);
+        setError(null);
+      }
+    } catch (err) {
+      if (isMounted.current && !controller.signal.aborted) {
+        setError(err as Error);
+      }
+    } finally {
+      if (isMounted.current && !controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [
+    disable,
+    isVisible,
+    language,
+    routeObj,
+    seq,
+    stopList,
+    holidays,
+    serviceDayMap,
+  ]);
+
+  const refetch = useCallback(async () => {
+    await fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     if (disable) return;
@@ -45,19 +104,9 @@ export const useEtas = (routeId: string, disable: boolean = false) => {
     return () => {
       isMounted.current = false;
       clearInterval(fetchEtaInterval);
+      abortControllerRef.current?.abort();
     };
-  }, [routeId, fetchData, refreshInterval, disable]);
+  }, [fetchData, refreshInterval, disable]);
 
-  return etas;
-};
-
-const DefaultRoute = {
-  co: [""],
-  stops: { "": [""] },
-  dest: { zh: "", en: "" },
-  bound: "",
-  nlbId: 0,
-  gtfsId: "",
-  fares: [],
-  faresHoliday: [],
+  return { etas, loading, error, refetch };
 };

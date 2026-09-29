@@ -35,7 +35,7 @@ const TimeReport = ({
   const {
     db: { routeList, stopList },
   } = useContext(DbContext);
-  const etas = useEtas(`${routeId}/${seq}`);
+  const { etas } = useEtas(`${routeId}/${seq}`);
 
   const { route, co, stops } = routeList[routeId];
   const stopId = Object.values(stops)[0][seq];

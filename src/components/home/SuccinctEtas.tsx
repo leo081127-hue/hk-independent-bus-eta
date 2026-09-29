@@ -26,7 +26,7 @@ const SuccinctEtas = ({
   const {
     db: { routeList },
   } = useContext(DbContext);
-  const _etas = useEtas(routeId, Boolean(value));
+  const { etas: _etas } = useEtas(routeId, Boolean(value));
   const etas = value ?? _etas;
   const isCoop = routeList[routeId.split("/")[0]].co.length > 1;
 

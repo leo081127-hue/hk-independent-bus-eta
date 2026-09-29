@@ -37,3 +37,5 @@ yarn-error.log*
 .vscode/
 .yarn
 .yarnrc.yml
+# npm users are welcome, but the canonical lockfile is yarn.lock
+package-lock.json
