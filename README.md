@@ -51,26 +51,27 @@ hk-independent-bus-eta/
 ├── src/                          # React 前端 (TypeScript)
 │   ├── components/               # UI 組件 (MUI + MapLibre)
 │   ├── hooks/                    # 核心業務邏輯 Hooks
-│   │   ├── useEtas.ts            # 單路線 ETA 輪詢 + AbortController
-│   │   ├── useStopEtas.ts        # 多站點合併 ETA + 智能去重
-│   │   ├── useRoutePath.ts       # 路線幾何 + sessionStorage/ETag 緩存
-│   │   ├── useVirtualList.ts     # 虛擬滾動 (大列表效能)
-│   │   └── useOnlineStatus.ts    # 線上/離線偵測 + 自動重連
-│   ├── context/                  # React Context (DB、App、Search、Emotion)
-│   ├── utils/                    # 通用工具 (cache、performance、RDP 簡化)
-│   ├── db.ts                     # IndexedDB v2 + stale-while-revalidate
-│   ├── routeAlignment.ts         # 幾何運算 + 太陽位置 + Web Worker
-│   └── timetable.ts              # 班次表判斷 (純函數、可測試)
+│   │   ├── useEtas.tsx           # 單一路線 ETA 輪詢 (loading / error / refetch)
+│   │   ├── useStopEtas.tsx       # 多站點合併 ETA + 智能去重 + 路線評分
+│   │   ├── useRoutePath.tsx      # 路線幾何 + 快取
+│   │   ├── useOnline.tsx         # 線上/離線偵測
+│   │   ├── useNotices.tsx        # 公告載入
+│   │   └── useTranslation.ts     # 語言切換
+│   ├── context/                  # React Context (DB、App、Search)
+│   ├── utils.ts                  # 通用工具函數
+│   ├── db.ts                     # 資料庫抓取 + 本地儲存
+│   ├── routeAlignment.ts         # 路線幾何運算
+│   └── timetable.ts              # 班次表判斷 (純函數、已單元測試)
 ├── src-tauri/                    # Tauri 2 原生層
 │   ├── src/lib.rs                # Rust 入口 + 插件註冊
 │   ├── gen/android/              # Android 專案 (Gradle Kotlin DSL)
 │   ├── Cargo.toml                # Rust 依賴
 │   └── tauri.conf.json           # Tauri 配置
-├── public/                       # 靜態資源 (icons、manifest、service-worker)
+├── public/                       # 靜態資源 (icons、manifest)
 ├── scripts/                      # 建構/部署腳本
-├── vite.config.ts                # Vite + Rollup 分包/壓縮配置
+├── vite.config.ts                # Vite 建構配置
 ├── vitest.config.ts              # 單元測試配置
-└── .github/workflows/ci.yml      # CI/CD (TypeCheck → Test → Build → APK)
+└── .github/workflows/ci.yml      # CI (Typecheck → Test → Build web)
 ```
 
 ---
@@ -82,18 +83,14 @@ hk-independent-bus-eta/
 | 工具 | 版本 | 安裝指令 |
 |------|------|----------|
 | Node.js | ≥ 20 LTS | `nvm install 20` |
-| pnpm / yarn | ≥ 9 / ≥ 1.22 | `corepack enable` |
+| yarn | ≥ 1.22 | `corepack enable` |
 | Rust | ≥ 1.77 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | Android SDK | API 34 + NDK 26 | 見下方「Android 建構」 |
 
 ### 安裝依賴
 
 ```bash
-# 推薦 pnpm (更快、磁碟佔用少)
 corepack enable
-pnpm install --frozen-lockfile
-
-# 或 yarn
 yarn install --frozen-lockfile
 ```
 
@@ -101,24 +98,24 @@ yarn install --frozen-lockfile
 
 ```bash
 # Web 開發 (HTTPS + HMR)
-pnpm dev          # 或 yarn start
+yarn start
 
 # Tauri 桌面開發 (熱重載)
-pnpm tauri dev
+yarn tauri dev
 ```
 
 ### 建構生產版
 
 ```bash
 # 1️⃣ Web 靜態檔案 (輸出至 build/)
-pnpm build:web
+yarn build
 
 # 2️⃣ Android Release APK (需先完成 Android SDK 設定)
-pnpm build:android
+yarn tauri android build --target aarch64-linux-android
 # 輸出: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 
 # 3️⃣ Desktop 安裝包
-pnpm tauri build
+yarn tauri build
 ```
 
 ---
@@ -147,7 +144,7 @@ sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" "ndk;26.
 
 # 4. 初始化 Tauri Android 專案 (僅首次)
 cd /path/to/hk-independent-bus-eta
-pnpm tauri android init
+yarn tauri android init
 ```
 
 ### 建構 Release APK
@@ -159,10 +156,10 @@ cd /path/to/hk-independent-bus-eta
 ./build-apk.sh
 
 # 或分步
-pnpm typecheck
-pnpm test
-pnpm build:web
-pnpm tauri android build --target aarch64-linux-android
+yarn typecheck
+yarn test
+yarn build
+yarn tauri android build --target aarch64-linux-android
 ```
 
 **產出位置**：
@@ -195,38 +192,43 @@ hkbus.keyPassword=YOUR_KEY_PASS" >> gradle.properties
 
 ```bash
 # 型別檢查
-pnpm typecheck
+yarn typecheck
 
-# ESLint + Prettier
-pnpm lint
-pnpm format
+# ESLint
+yarn lint
 
 # 單元測試 (Vitest + React Testing Library)
-pnpm test
-pnpm test:coverage  # 覆蓋率報告
-
-# E2E 測試 (Playwright)
-pnpm test:e2e
-
-# Bundle 分析
-pnpm analyze  # 開啟 stats.html 視覺化
+yarn test
+yarn test:watch     # watch 模式
+yarn test:ui        # Vitest UI
+yarn test:coverage  # 覆蓋率報告 (coverage/index.html)
 ```
 
-**CI/CD** (`.github/workflows/ci.yml`)：每次 Push/PR 自動跑型別檢查、測試、建構 Web、建構 Android APK 並上傳 Artifact。
+現有測試：
+
+| 檔案 | 涵蓋範圍 |
+|------|----------|
+| `src/timetable.test.ts` | `isHoliday`、`isRouteAvaliable`（頭尾班次、通宵車、未知 service id 的 fail-open 行為） |
+| `src/hooks/useEtas.test.tsx` | 首次載入、成功取得 ETA、`disabled`／非前景時不抓取、錯誤處理、`refetch()` |
+
+**CI** (`.github/workflows/ci.yml`)：每次 push／PR 到 `master` 會自動執行 typecheck → 單元測試 → Web 建構。
+Android／Desktop 打包需要 Rust + Android SDK/NDK，請於本機或專用 runner 執行（見「Android APK 建構」）。
+E2E（Playwright）尚未納入，屬後續規劃。
 
 ---
 
-## 📦 Performance Optimizations / 效能優化摘要
+## 📦 Performance Notes / 效能說明
 
-| 優化項目 | 實作方式 | 收益 |
-|----------|----------|------|
-| **程式碼分包** | `manualChunks` (vendor-mui, vendor-map, hk-bus-eta) | 首屏 JS -36% |
-| **Terser 深度壓縮** | `passes: 3`, `pure_getters`, `unsafe_math` | gzip -150 KB |
-| **虛擬滾動** | `useVirtualList` (路線/站點列表) | 記憶體穩定、60fps 滾動 |
-| **請求去重/取消** | `AbortController` + `dedupeRequest` | 避免重複網路請求 |
-| **離線緩存** | IndexedDB v2 + SW `periodicSync` + ETag 再驗證 | 離線可用率 99%+ |
-| **幾何簡化** | RDP 演算法 (可配置容差) | 地圖渲染 -60% 頂點 |
-| **Web Worker** | 太陽位置計算離主執行緒 | 主執行緒不阻塞 |
+| 項目 | 現況 |
+|------|------|
+| **路由層分包** | `vite build` 以 `React.lazy` + 動態 `import()` 拆分頁面（`RouteEtaPage`、`RouteSearchPage`、`SettingsPage`…） |
+| **ETA 輪詢** | `useEtas` / `useStopEtas` 依 `refreshInterval` 輪詢；切到背景 (`document.hidden`) 時停止，返回前景即恢復 |
+| **請求取消** | 每次重新抓取前會 `AbortController.abort()` 前一請求，避免過期回應覆寫新資料 |
+| **站點 ETA 去重** | `useStopEtas` 依「路線 + 公司 + 相同到站時間」合併，並以可用性／班次表／收費資料為路線評分 |
+| **路線幾何** | `useRoutePath` 快取結果，減少重複抓取 |
+| **PWA 離線** | `vite-plugin-pwa` 產生 service worker，預快取應用程式外殼 |
+
+> ⚠️ 目前仍有 >500 kB 的 chunk（`EmotionPage`、`geom`），屬後續優化方向。
 
 ---
 
@@ -249,7 +251,7 @@ VITE_ETA_API_BASE=https://data.etabus.gov.hk
 
 ```json
 {
-  "build": { "frontendDist": "../build", "beforeBuildCommand": "pnpm build:web" },
+  "build": { "frontendDist": "../build", "beforeBuildCommand": "yarn build" },
   "app": { "security": { "csp": "default-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:" } },
   "bundle": { "android": { "splashScreen": { "enabled": true, "backgroundColor": "#fedb00" } } }
 }
@@ -260,9 +262,9 @@ VITE_ETA_API_BASE=https://data.etabus.gov.hk
 ## 🤝 Contributing / 貢獻指南
 
 1. Fork & Clone
-2. `pnpm install`
+2. `yarn install`
 3. 建立分支：`git checkout -b feat/amazing-feature`
-4. 開發 + 測試：`pnpm test && pnpm typecheck && pnpm lint`
+4. 開發 + 測試：`yarn test && yarn typecheck && yarn lint`
 5. 提交：`git commit -m "feat: add amazing feature"` (遵循 [Conventional Commits](https://www.conventionalcommits.org/))
 6. Push & PR
 

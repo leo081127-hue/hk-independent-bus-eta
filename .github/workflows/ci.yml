@@ -1,0 +1,41 @@
+# Quality gate: typecheck -> unit tests -> production web build.
+# Android/desktop bundles are built separately, since they need the Rust
+# toolchain plus the Android SDK/NDK (see README "Android build" section).
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  quality:
+    name: Typecheck, test & build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.x
+          cache: yarn
+
+      # Skip the Chromium download: the browser is only needed by the
+      # pre-rendering script, not by the unit test suite.
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+
+      - name: Typecheck
+        run: yarn run typecheck
+
+      - name: Unit tests
+        run: yarn run test
+
+      - name: Build web bundle
+        run: yarn run build
